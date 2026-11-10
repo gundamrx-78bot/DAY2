@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>우리 서비스 구조 설명</title>
+<style>
+  :root {
+    --bg: #f6f8fb; --card: #ffffff; --text: #1d2733; --muted: #5d6b7a; --line: #c9d3de;
+    --front: #2f7fd1; --back: #2e9e6b; --db: #8a5cd0; --cloud: #e08a2c; --ok: #1f9d55; --bad: #d14343;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #11161c; --card: #1a222b; --text: #e8eef4; --muted: #9aa9b8; --line: #34424f;
+            --front: #5aa3f0; --back: #4cc38a; --db: #b08af0; --cloud: #f0a64c; --ok: #4cc38a; --bad: #f07070; }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; background: var(--bg); color: var(--text); line-height: 1.65; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  .sub { color: var(--muted); margin-bottom: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+
+  svg { width: 100%; height: auto; display: block; }
+  .node rect { fill: var(--card); stroke-width: 2.5; transition: stroke-width .3s, filter .3s; }
+  .node text { fill: var(--text); text-anchor: middle; }
+  .node .t1 { font-size: 17px; font-weight: bold; }
+  .node .t2 { font-size: 12.5px; fill: var(--muted); }
+  .node.front rect { stroke: var(--front); } .node.back rect { stroke: var(--back); } .node.db rect { stroke: var(--db); }
+  .node.future rect { stroke: var(--cloud); stroke-dasharray: 7 5; }
+  .node.on rect { stroke-width: 6; filter: drop-shadow(0 0 8px currentColor); }
+  .node.front.on { color: var(--front); } .node.back.on { color: var(--back); } .node.db.on { color: var(--db); } .node.future.on { color: var(--cloud); }
+  .node.dim { opacity: .35; }
+  .zone { fill: none; stroke: var(--line); stroke-width: 2; stroke-dasharray: 6 6; }
+  .zonelabel { font-size: 13px; fill: var(--muted); }
+  .wire { stroke: var(--line); stroke-width: 3; fill: none; }
+  .wire.future { stroke: var(--cloud); stroke-dasharray: 5 6; opacity: .7; }
+  #packet { transition: transform 1.1s ease-in-out, opacity .3s; }
+  #packetlabel { font-size: 12.5px; font-weight: bold; fill: #fff; text-anchor: middle; }
+
+  .caption { min-height: 112px; }
+  .caption .step { color: var(--muted); font-size: .85rem; }
+  .caption h2 { font-size: 1.15rem; margin: 2px 0 6px; }
+  .caption p { color: var(--text); }
+  .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--text); padding: 8px 14px; border-radius: 10px; cursor: pointer; }
+  button:hover { border-color: var(--front); }
+  .dots { display: flex; gap: 6px; margin-left: auto; }
+  .dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); cursor: pointer; }
+  .dots i.cur { background: var(--front); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+  .card h3 { font-size: 1.05rem; margin-bottom: 8px; }
+  .addr { font-family: Consolas, monospace; font-size: 1.1rem; padding: 8px 10px; background: var(--bg); border-radius: 8px; margin-bottom: 8px; }
+  .addr b:nth-child(1) { color: var(--front); } .addr b:nth-child(2) { color: var(--cloud); }
+  ul.plain { list-style: none; }
+  ul.plain li { padding: 6px 0; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: flex-start; }
+  ul.plain li:last-child { border-bottom: 0; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--line); flex: none; margin-top: 7px; }
+  .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); } .dot.wait { background: var(--cloud); }
+  .small { font-size: .88rem; color: var(--muted); }
+  code { font-family: Consolas, monospace; background: var(--bg); padding: 1px 6px; border-radius: 5px; }
+  @media (prefers-reduced-motion: reduce) { #packet { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🗺️ 우리 서비스는 이렇게 움직여요</h1>
+  <p class="sub">식당에 비유해서 보면 쉬워요. 버튼을 눌러 한 단계씩 따라가 보세요. 더 자세히 알고 싶다면 <a href="detail.html" style="color:var(--front)">main.py · FastAPI · Supabase · Railway 동작 원리 →</a></p>
+
+  <div class="card">
+    <svg viewBox="0 0 900 430" role="img" aria-label="브라우저가 FastAPI 서버에 요청하고, 서버가 Supabase 데이터베이스에서 답을 받아 돌려주는 구조도">
+      <rect class="zone" x="24" y="96" width="572" height="240" rx="18"/>
+      <text class="zonelabel" x="40" y="120">🖥️ 내 컴퓨터 (주소: 127.0.0.1)</text>
+      <rect class="zone" x="626" y="96" width="250" height="240" rx="18"/>
+      <text class="zonelabel" x="642" y="120">☁️ 인터넷 (Supabase 회사 서버)</text>
+
+      <path class="wire" d="M262 215 H348"/>
+      <path class="wire" d="M552 215 H638"/>
+      <path class="wire future" d="M160 345 V262"/>
+      <path class="wire future" d="M450 345 V262"/>
+
+      <g class="node front" id="n-browser">
+        <rect x="60" y="165" width="200" height="100" rx="14"/>
+        <text class="t1" x="160" y="205">🧑 손님</text>
+        <text class="t2" x="160" y="228">브라우저 · 프론트엔드</text>
+        <text class="t2" x="160" y="247">(화면, 버튼)</text>
+      </g>
+      <g class="node back" id="n-server">
+        <rect x="350" y="165" width="200" height="100" rx="14"/>
+        <text class="t1" x="450" y="205">👨‍🍳 주방</text>
+        <text class="t2" x="450" y="228">FastAPI · main.py</text>
+        <text class="t2" x="450" y="247">포트 8000에서 대기</text>
+      </g>
+      <g class="node db" id="n-db">
+        <rect x="640" y="165" width="220" height="100" rx="14"/>
+        <text class="t1" x="750" y="205">📦 창고</text>
+        <text class="t2" x="750" y="228">Supabase · 데이터베이스</text>
+        <text class="t2" x="750" y="247">(저장된 데이터)</text>
+      </g>
+      <g class="node future" id="n-vercel">
+        <rect x="60" y="345" width="200" height="66" rx="12"/>
+        <text class="t1" x="160" y="373">Vercel</text>
+        <text class="t2" x="160" y="394">화면을 인터넷에 올리는 곳</text>
+      </g>
+      <g class="node future" id="n-railway">
+        <rect x="350" y="345" width="200" height="66" rx="12"/>
+        <text class="t1" x="450" y="373">Railway</text>
+        <text class="t2" x="450" y="394">주방을 인터넷에 올리는 곳</text>
+      </g>
+
+      <g id="packet" style="transform: translate(160px,215px); opacity:0">
+        <rect x="-44" y="-15" width="88" height="30" rx="15" fill="#e0662c"/>
+        <text id="packetlabel" x="0" y="5"></text>
+      </g>
+    </svg>
+
+    <div class="caption" aria-live="polite">
+      <div class="step" id="stepno"></div>
+      <h2 id="steptitle"></h2>
+      <p id="steptext"></p>
+    </div>
+    <div class="controls">
+      <button id="prev">◀ 이전</button>
+      <button id="play">⏸ 정지</button>
+      <button id="next">다음 ▶</button>
+      <div class="dots" id="dots"></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>🔢 주소 읽는 법</h3>
+      <div class="addr"><b>127.0.0.1</b> : <b>8000</b></div>
+      <p><b>127.0.0.1</b>은 "내 컴퓨터 자신"이라는 뜻이에요. <b>8000</b>은 그 컴퓨터 안의 "문 번호"예요. 주방(FastAPI)이 8000번 문 앞에서 손님을 기다리고 있어요.</p>
+      <p class="small" style="margin-top:6px">그래서 이 주소는 내 컴퓨터에서만 열려요. 다른 사람은 못 들어와요.</p>
+    </div>
+
+    <div class="card">
+      <h3>📄 main.py는 뭘 하나요?</h3>
+      <ul class="plain">
+        <li><span class="dot ok"></span><span><code>.env</code>에서 Supabase 열쇠를 읽어요</span></li>
+        <li><span class="dot ok"></span><span><code>/health</code> : "주방 살아 있어요?" → <code>ok</code></span></li>
+        <li><span class="dot ok"></span><span><code>/db-check</code> : "창고 문 열려요?" → <code>connected</code></span></li>
+        <li><span class="dot ok"></span><span>화면이 요청해도 되는 주소(CORS)를 정해 둬요</span></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>🚦 지금 켜져 있는지 확인</h3>
+      <ul class="plain" id="status">
+        <li><span class="dot ok"></span><span>화면(이 페이지)<br><span class="small">보이고 있으니 켜져 있어요</span></span></li>
+        <li><span class="dot" id="d-health"></span><span>주방 FastAPI<br><span class="small" id="m-health">확인 중…</span></span></li>
+        <li><span class="dot" id="d-db"></span><span>창고 Supabase<br><span class="small" id="m-db">확인 중…</span></span></li>
+        <li><span class="dot wait"></span><span>Railway · Vercel<br><span class="small">아직 인터넷에 올리기 전이에요</span></span></li>
+      </ul>
+      <div class="controls"><button id="recheck">🔄 다시 확인</button></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  var API = "http://127.0.0.1:8000";
+  var X = { browser: 160, server: 450, db: 750 }, Y = 215;
+  var steps = [
+    { t: "전체 그림", d: "손님(브라우저)이 주문하면, 주방(FastAPI)이 만들고, 필요하면 창고(Supabase)에서 재료를 꺼내 와요. 이 셋이 지금 서로 이어져 있어요.", on: ["browser","server","db"] },
+    { t: "① 손님이 주문해요", d: "화면에서 버튼을 누르면 브라우저가 127.0.0.1:8000 주방으로 \"/health 알려주세요\"라는 쪽지를 보내요.", on: ["browser"], pkt: ["browser","server","GET /health"] },
+    { t: "② 주방이 쪽지를 받아요", d: "8000번 문 앞에서 기다리던 FastAPI가 쪽지를 받고, main.py 안의 알맞은 함수를 찾아 실행해요.", on: ["server"] },
+    { t: "③ 열쇠를 들고 창고로", d: "데이터가 필요하면 .env에 숨겨 둔 열쇠(SUPABASE_SECRET_KEY)로 창고 문을 열어요. 열쇠는 주방만 갖고 있어서 손님 화면에는 절대 보이지 않아요.", on: ["server","db"], pkt: ["server","db","🔑 열쇠"] },
+    { t: "④ 창고가 대답해요", d: "Supabase가 \"문 열렸어요, 연결됐어요\"라고 주방에 알려 줘요.", on: ["db"], pkt: ["db","server","connected"] },
+    { t: "⑤ 주방이 손님에게 답해요", d: "FastAPI가 결과를 정리해서 브라우저에 돌려줘요. 화면에는 {\"status\":\"ok\"} 같은 답이 나타나요.", on: ["server","browser"], pkt: ["server","browser","{status: ok}"] },
+    { t: "나중에: 인터넷에 올리기", d: "지금은 전부 내 컴퓨터 안에서만 돌아요. Vercel은 화면을, Railway는 주방을 인터넷에 올려서 다른 사람도 쓸 수 있게 해 줘요. 아직은 올리기 전이라 점선으로 그렸어요.", on: ["vercel","railway"] }
+  ];
+  var ids = { browser: "n-browser", server: "n-server", db: "n-db", vercel: "n-vercel", railway: "n-railway" };
+  var cur = 0, playing = true, timer = null;
+  var packet = document.getElementById("packet"), plabel = document.getElementById("packetlabel");
+
+  function render() {
+    var s = steps[cur];
+    document.getElementById("stepno").textContent = "단계 " + (cur + 1) + " / " + steps.length;
+    document.getElementById("steptitle").textContent = s.t;
+    document.getElementById("steptext").textContent = s.d;
+    Object.keys(ids).forEach(function (k) {
+      var el = document.getElementById(ids[k]), on = s.on.indexOf(k) >= 0;
+      el.classList.toggle("on", on);
+      el.classList.toggle("dim", !on && cur !== 0);
+    });
+    if (s.pkt) {
+      plabel.textContent = s.pkt[2];
+      packet.style.transition = "none";
+      packet.style.transform = "translate(" + X[s.pkt[0]] + "px," + Y + "px)";
+      packet.style.opacity = 1;
+      void packet.getBoundingClientRect();
+      packet.style.transition = "";
+      packet.style.transform = "translate(" + X[s.pkt[1]] + "px," + Y + "px)";
+    } else {
+      packet.style.opacity = 0;
+    }
+    document.querySelectorAll(".dots i").forEach(function (d, i) { d.classList.toggle("cur", i === cur); });
+  }
+  function go(n) { cur = (n + steps.length) % steps.length; render(); }
+  function tick() { clearInterval(timer); if (playing) timer = setInterval(function () { go(cur + 1); }, 4200); }
+
+  var dots = document.getElementById("dots");
+  steps.forEach(function (_, i) {
+    var d = document.createElement("i"); d.title = "단계 " + (i + 1);
+    d.onclick = function () { go(i); tick(); }; dots.appendChild(d);
+  });
+  document.getElementById("prev").onclick = function () { go(cur - 1); tick(); };
+  document.getElementById("next").onclick = function () { go(cur + 1); tick(); };
+  document.getElementById("play").onclick = function () {
+    playing = !playing; this.textContent = playing ? "⏸ 정지" : "▶ 재생"; tick();
+  };
+
+  function check(path, dot, msg, okText) {
+    var d = document.getElementById(dot), m = document.getElementById(msg);
+    d.className = "dot"; m.textContent = "확인 중…";
+    fetch(API + path).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+      d.className = "dot ok"; m.textContent = okText;
+    }).catch(function () {
+      d.className = "dot bad";
+      m.textContent = path === "/health" ? "응답이 없어요. uvicorn이 켜져 있는지 확인하세요." : "연결 실패. 서버나 .env 키를 확인하세요.";
+    });
+  }
+  function recheck() {
+    check("/health", "d-health", "m-health", "켜져 있어요 (포트 8000)");
+    check("/db-check", "d-db", "m-db", "연결됐어요");
+  }
+  document.getElementById("recheck").onclick = recheck;
+
+  render(); tick(); recheck();
+</script>
+</body>
+</html>

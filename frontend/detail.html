@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>동작 원리 자세히 보기</title>
+<style>
+  :root {
+    --bg: #f6f8fb; --card: #ffffff; --text: #1d2733; --muted: #5d6b7a; --line: #c9d3de; --code: #f0f3f7;
+    --accent: #2f7fd1; --hl: #fff3c4; --ok: #1f9d55; --bad: #d14343; --warn: #e0662c;
+    --c1: #2f7fd1; --c2: #2e9e6b; --c3: #8a5cd0; --c4: #e08a2c; --c5: #c2547a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #11161c; --card: #1a222b; --text: #e8eef4; --muted: #9aa9b8; --line: #34424f; --code: #0f151b;
+            --accent: #5aa3f0; --hl: #4a4220; --ok: #4cc38a; --bad: #f07070; --warn: #f0905a;
+            --c1: #5aa3f0; --c2: #4cc38a; --c3: #b08af0; --c4: #f0a64c; --c5: #f08aae; }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; background: var(--bg); color: var(--text); line-height: 1.65; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 20px 16px 56px; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  .sub { color: var(--muted); margin-bottom: 14px; }
+  .sub a { color: var(--accent); }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .tabs button { font: inherit; padding: 9px 14px; border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 10px; cursor: pointer; }
+  .tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: bold; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+  .intro { color: var(--muted); margin-bottom: 10px; }
+  section { display: none; } section.on { display: block; }
+
+  /* main.py 코드 따라가기 */
+  .codegrid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 14px; }
+  @media (max-width: 800px) { .codegrid { grid-template-columns: 1fr; } }
+  pre.code { background: var(--code); border-radius: 10px; padding: 10px 0; overflow-x: auto; font-family: Consolas, monospace; font-size: 13px; line-height: 1.55; }
+  pre.code .ln { display: block; padding: 0 12px 0 0; white-space: pre; transition: background .3s; }
+  pre.code .ln i { display: inline-block; width: 36px; text-align: right; margin-right: 12px; color: var(--muted); font-style: normal; user-select: none; }
+  pre.code .ln.hl { background: var(--hl); }
+  pre.code .ln.dim { opacity: .45; }
+  .mem h3, .explain h3 { font-size: 1rem; margin-bottom: 6px; }
+  .chips { display: flex; flex-direction: column; gap: 6px; min-height: 60px; margin-bottom: 12px; }
+  .chip { padding: 7px 10px; border-radius: 9px; border: 2px solid var(--c1); font-size: .88rem; animation: pop .45s ease; background: var(--card); }
+  .chip small { color: var(--muted); display: block; }
+  @keyframes pop { from { transform: scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
+  .explain .st { color: var(--muted); font-size: .85rem; }
+  .explain h2 { font-size: 1.1rem; margin: 2px 0 6px; }
+  .note { margin-top: 10px; padding: 8px 10px; border-radius: 9px; background: var(--code); font-size: .88rem; color: var(--muted); }
+
+  /* 시퀀스 그림 */
+  .seqbox svg { width: 100%; height: auto; display: block; }
+  .lane-box { fill: var(--card); stroke-width: 2.5; }
+  .lane-t { font-size: 14px; font-weight: bold; text-anchor: middle; fill: var(--text); }
+  .lane-s { font-size: 11.5px; text-anchor: middle; fill: var(--muted); }
+  .life { stroke: var(--line); stroke-width: 2; stroke-dasharray: 5 6; }
+  .arrow { fill: none; stroke-width: 3; }
+  .arrow.draw { stroke-dasharray: 600; stroke-dashoffset: 600; animation: draw .9s ease forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .lbl { font-size: 12.5px; font-weight: bold; text-anchor: middle; paint-order: stroke; stroke: var(--card); stroke-width: 5px; fill: var(--text); }
+  .num { font-size: 11px; font-weight: bold; fill: #fff; text-anchor: middle; }
+  .old { opacity: .55; }
+  .capt { min-height: 118px; margin-top: 6px; }
+  .capt .st { color: var(--muted); font-size: .85rem; }
+  .capt h2 { font-size: 1.1rem; margin: 2px 0 6px; }
+
+  .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+  .controls button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--text); padding: 8px 14px; border-radius: 10px; cursor: pointer; }
+  .controls button:hover { border-color: var(--accent); }
+  .dots { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+  .dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); cursor: pointer; }
+  .dots i.cur { background: var(--accent); }
+  code { font-family: Consolas, monospace; background: var(--code); padding: 1px 6px; border-radius: 5px; font-size: .9em; }
+  .box { border-left: 4px solid var(--warn); background: var(--code); padding: 8px 12px; border-radius: 0 9px 9px 0; margin-top: 8px; font-size: .92rem; }
+  @media (prefers-reduced-motion: reduce) { .arrow.draw { animation: none; stroke-dashoffset: 0; } .chip { animation: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔍 동작 원리 자세히 보기</h1>
+  <p class="sub">전체 그림은 <a href="structure.html">구조 설명</a>에서 봤죠. 여기서는 코드가 실제로 어떻게 움직이는지 한 걸음씩 봐요.</p>
+
+  <div class="tabs" id="tabs">
+    <button data-t="code" class="on">① main.py 한 줄씩</button>
+    <button data-t="req">② 요청 한 번의 여정</button>
+    <button data-t="sb">③ Supabase와 대화</button>
+    <button data-t="rw">④ Railway에 올리면</button>
+  </div>
+
+  <!-- ① 코드 -->
+  <section id="s-code" class="on">
+    <div class="card">
+      <p class="intro">왼쪽은 <code>main.py</code> 전체 코드예요. 노란 줄이 지금 설명하는 부분이에요. 오른쪽은 그 줄이 실행된 뒤 서버 메모리에 무엇이 생겼는지 보여 줘요.</p>
+      <div class="codegrid">
+        <pre class="code" id="code"></pre>
+        <div>
+          <div class="mem"><h3>🧠 서버 메모리에 생긴 것</h3><div class="chips" id="chips"></div></div>
+          <div class="explain" id="explain1"></div>
+        </div>
+      </div>
+      <div class="controls" id="ctl-code"></div>
+    </div>
+  </section>
+
+  <!-- ② 요청 -->
+  <section id="s-req">
+    <div class="card">
+      <p class="intro">브라우저가 <code>/health</code>를 부르면, 주소를 받은 글자가 어떤 순서로 코드까지 가는지 따라가 봐요. <b>uvicorn</b>은 문 앞에서 전화를 받는 직원이고, <b>FastAPI</b>는 "이 주소는 이 함수가 처리해"라는 규칙을 가진 주방장이에요.</p>
+      <div class="seqbox" id="seq-req"></div>
+      <div class="capt" id="capt-req" aria-live="polite"></div>
+      <div class="controls" id="ctl-req"></div>
+    </div>
+  </section>
+
+  <!-- ③ Supabase -->
+  <section id="s-sb">
+    <div class="card">
+      <p class="intro"><code>/db-check</code> 한 줄 <code>sb.auth.admin.list_users(...)</code>이 Supabase까지 갔다 오는 과정이에요. 파이썬 코드가 아니라 <b>인터넷 요청(HTTPS)</b>이 오가는 거예요.</p>
+      <div class="seqbox" id="seq-sb"></div>
+      <div class="capt" id="capt-sb" aria-live="polite"></div>
+      <div class="controls" id="ctl-sb"></div>
+      <div class="box">🔑 <b>secret key는 관리자 열쇠</b>예요. 모든 데이터를 읽고 쓸 수 있어서 서버(<code>main.py</code>, Railway)에만 두고, 브라우저 화면 코드에는 절대 넣지 않아요. 화면에서 쓰는 건 권한이 작은 공개용(publishable) 키예요.</div>
+    </div>
+  </section>
+
+  <!-- ④ Railway -->
+  <section id="s-rw">
+    <div class="card">
+      <p class="intro">지금은 내 컴퓨터가 서버예요. Railway는 <b>남의 컴퓨터(항상 켜져 있는 서버)를 빌려서</b> 같은 코드를 대신 돌려 주는 곳이에요. 이 과정은 나중에 배포할 때 하게 돼요. 지금은 로그인하지 않아도 돼요.</p>
+      <div class="seqbox" id="seq-rw"></div>
+      <div class="capt" id="capt-rw" aria-live="polite"></div>
+      <div class="controls" id="ctl-rw"></div>
+      <div class="box">🏠 <b>로컬과 Railway의 차이</b><br>
+        로컬: <code>127.0.0.1:8000</code> (내 컴퓨터에서만 열림, 키는 <code>.env</code> 파일에서)<br>
+        Railway: <code>0.0.0.0</code> + Railway가 정해 주는 <code>$PORT</code> (인터넷에 열림, 키는 Railway <b>Variables</b>에서)<br>
+        그래서 <code>main.py</code> 주석처럼 <b>같은 코드가 두 곳에서 그대로 돌아가요</b>. 키를 읽는 곳만 달라요.</div>
+    </div>
+  </section>
+</div>
+
+<script>
+// ───────────── 공통: 탭 ─────────────
+var tabs = document.querySelectorAll("#tabs button");
+tabs.forEach(function (b) {
+  b.onclick = function () {
+    tabs.forEach(function (x) { x.classList.toggle("on", x === b); });
+    document.querySelectorAll("section").forEach(function (s) { s.classList.toggle("on", s.id === "s-" + b.dataset.t); });
+  };
+});
+
+// 공통: 컨트롤(이전/다음/점)
+function makeControls(el, count, onGo) {
+  var cur = 0;
+  el.innerHTML = '<button class="p">◀ 이전</button><button class="n">다음 ▶</button><button class="r">↺ 처음부터</button><div class="dots"></div>';
+  var dots = el.querySelector(".dots");
+  for (var i = 0; i < count; i++) (function (i) { var d = document.createElement("i"); d.title = "단계 " + (i + 1); d.onclick = function () { go(i); }; dots.appendChild(d); })(i);
+  function go(n) { cur = Math.max(0, Math.min(count - 1, n)); el.querySelectorAll(".dots i").forEach(function (d, k) { d.classList.toggle("cur", k === cur); }); onGo(cur); }
+  el.querySelector(".p").onclick = function () { go(cur - 1); };
+  el.querySelector(".n").onclick = function () { go(cur + 1); };
+  el.querySelector(".r").onclick = function () { go(0); };
+  go(0);
+}
+
+// ───────────── ① main.py 코드 따라가기 ─────────────
+var CODE = [
+ 'import os','',
+ 'from fastapi import FastAPI, HTTPException',
+ 'from fastapi.middleware.cors import CORSMiddleware',
+ 'from pydantic import BaseModel',
+ 'from dotenv import load_dotenv',
+ 'from supabase import create_client','',
+ 'load_dotenv()','',
+ '# 로컬에선 .env를 읽고, Railway에선 Variables가 이미 들어 있음',
+ 'SUPABASE_URL = os.environ["SUPABASE_URL"]',
+ 'SUPABASE_SECRET_KEY = os.environ["SUPABASE_SECRET_KEY"]',
+ 'FRONT_ORIGINS = [',
+ '    o.strip() for o in os.getenv("FRONT_ORIGINS", "").split(",") if o.strip()',
+ '] or ["http://localhost:5500", "http://127.0.0.1:5500"]  # 로컬 프론트 기본값','',
+ 'sb = create_client(SUPABASE_URL, SUPABASE_SECRET_KEY)','',
+ 'app = FastAPI(title="my-api")','',
+ 'app.add_middleware(','    CORSMiddleware,','    allow_origins=FRONT_ORIGINS,','    allow_credentials=True,','    allow_methods=["*"],','    allow_headers=["*"],',')','','',
+ '@app.get("/health")','def health():','    return {"status": "ok"}','','',
+ '@app.get("/db-check")','def db_check():',
+ '    # 테이블 없이도 Supabase에 키로 접속되는지만 확인한다 (데이터는 돌려주지 않음)',
+ '    try:','        sb.auth.admin.list_users(page=1, per_page=1)','    except Exception as e:',
+ '        raise HTTPException(status_code=502, detail="Supabase 연결 실패: " + type(e).__name__)',
+ '    return {"supabase": "connected"}'
+];
+var S1 = [
+ { r:[1,7], t:"도구 상자 꺼내기", b:"맨 위 <code>import</code>는 \"이 도구를 쓸게요\"라는 선언이에요. 주방을 만드는 FastAPI, 문지기 CORS, .env를 읽는 dotenv, 창고에 연결하는 supabase를 가져와요. 아직 아무 일도 안 일어나요.", mem:[] },
+ { r:[9,9], t:".env 파일 읽기", b:"<code>load_dotenv()</code>가 <code>.env</code> 파일을 열어 <code>이름=값</code> 줄들을 <b>환경변수</b>라는 메모판에 옮겨 적어요. <code>.env</code>는 .gitignore에 있어서 GitHub에는 안 올라가요.", mem:[["환경변수 메모판","<code>.env</code>의 내용이 복사됨"]] },
+ { r:[11,13], t:"열쇠 꺼내기", b:"<code>os.environ[\"이름\"]</code>으로 메모판에서 값을 꺼내 변수에 담아요. 대괄호 방식은 <b>없으면 바로 KeyError로 서버가 시작도 못 해요.</b> 열쇠 없이 켜지는 것보다 일찍 실패하게 한 안전장치예요. Railway에서는 .env가 없고 Variables가 이 메모판 역할을 해요.", mem:[["SUPABASE_URL","창고 주소 (값은 .env에)"],["SUPABASE_SECRET_KEY","창고 관리자 열쇠 •••••"]] },
+ { r:[14,16], t:"손님 허용 목록 만들기", b:"<code>FRONT_ORIGINS</code> 환경변수를 쉼표로 쪼개 리스트로 만들어요. 값이 비어 있으면 <code>or</code> 뒤의 기본값(<code>localhost:5500</code>)을 써요. 브라우저가 \"이 주소에서 온 화면은 믿어도 돼\"를 판단할 때 쓰는 목록이에요.", mem:[["FRONT_ORIGINS","[\"http://localhost:5500\", \"http://127.0.0.1:5500\"]"]] },
+ { r:[18,18], t:"창고 연결 도구 만들기", b:"<code>create_client</code>가 <b>sb</b>라는 도구를 만들어요. 이때 창고에 전화하는 건 아니고, \"이 주소로 이 열쇠를 들고 가면 된다\"고 기억해 두는 거예요. 진짜 통신은 <code>sb</code>를 쓰는 순간(요청이 올 때) 일어나요.", mem:[["sb","Supabase 연결 도구 (주소+열쇠 보관)"]] },
+ { r:[20,20], t:"주방 열기", b:"<code>FastAPI(...)</code>가 <b>app</b>이라는 주방을 만들어요. 처음엔 메뉴판(주소 → 함수 연결표)이 비어 있어요. uvicorn은 나중에 이 <code>app</code>을 불러서 요청을 넘겨요.", mem:[["app","FastAPI 주방 (메뉴판은 비어 있음)"]] },
+ { r:[22,29], t:"문지기 세우기", b:"<code>add_middleware</code>는 모든 요청이 지나가는 문 앞에 문지기를 세워요. 요청의 <b>Origin</b>(어느 주소의 화면에서 왔는지)이 허용 목록에 있으면 응답에 \"이 손님은 받아도 돼요\" 표시를 붙여 줘요. 목록에 없는 화면에서 오면 브라우저가 응답을 막아요.", mem:[["문지기(CORS)","허용: FRONT_ORIGINS 목록"]] },
+ { r:[32,34], t:"메뉴판에 /health 올리기", b:"<code>@app.get(\"/health\")</code>는 \"GET 방식으로 /health가 오면 아래 함수를 실행해\"라고 메뉴판에 적는 거예요. 이 줄 아래 <code>def health()</code>는 <b>지금 실행되는 게 아니라 등록만</b> 돼요. 요청이 올 때마다 그때 실행돼요. 반환한 파이썬 dict는 FastAPI가 JSON으로 바꿔 줘요.", mem:[["메뉴판","GET /health → health()"]] },
+ { r:[37,44], t:"메뉴판에 /db-check 올리기", b:"같은 방식으로 <code>/db-check</code>가 등록돼요. 이 함수 안의 <code>sb.auth.admin.list_users</code>가 실제로 Supabase에 물어보고, 성공하면 <code>connected</code>를, 실패하면 <code>502</code> 오류를 돌려줘요. (③번 탭에서 자세히 봐요)", mem:[["메뉴판","GET /db-check → db_check()"]] },
+ { r:[1,44], t:"서버 준비 끝, 이제 대기", b:"지금까지의 줄은 <b>uvicorn이 켜질 때 딱 한 번</b> 위에서 아래로 실행돼요. 그 뒤 uvicorn이 8000번 포트에서 요청을 기다려요. <code>--reload</code>를 붙였으면 파일을 저장할 때마다 처음부터 다시 한 번 실행돼요.", mem:[["uvicorn","포트 8000에서 대기 중 (요청마다 위 함수들을 호출)"]] }
+];
+(function () {
+  var codeEl = document.getElementById("code");
+  CODE.forEach(function (l, i) {
+    var d = document.createElement("span"); d.className = "ln";
+    var n = document.createElement("i"); n.textContent = i + 1;
+    d.appendChild(n); d.appendChild(document.createTextNode(l)); codeEl.appendChild(d);
+  });
+  var chips = document.getElementById("chips"), exp = document.getElementById("explain1");
+  makeControls(document.getElementById("ctl-code"), S1.length, function (i) {
+    var s = S1[i];
+    codeEl.querySelectorAll(".ln").forEach(function (d, k) {
+      var on = k + 1 >= s.r[0] && k + 1 <= s.r[1], all = s.r[0] === 1 && s.r[1] === 44;
+      d.classList.toggle("hl", on && !all); d.classList.toggle("dim", !on && !all);
+    });
+    var first = codeEl.querySelectorAll(".ln")[Math.max(0, s.r[0] - 1)];
+    if (first && s.r[0] > 1) { var box = codeEl.getBoundingClientRect(); /* 필요하면 스크롤 */ }
+    chips.innerHTML = "";
+    S1.slice(0, i + 1).forEach(function (x, idx) {
+      x.mem.forEach(function (m) {
+        var c = document.createElement("div"); c.className = "chip";
+        c.innerHTML = "<b>" + m[0] + "</b><small>" + m[1] + "</small>";
+        if (idx !== i) c.style.animation = "none"; chips.appendChild(c);
+      });
+    });
+    if (!chips.children.length) chips.innerHTML = '<span style="color:var(--muted);font-size:.88rem">아직 아무것도 없어요</span>';
+    exp.innerHTML = '<div class="st">단계 ' + (i + 1) + " / " + S1.length + "</div><h2>" + s.t + "</h2><p>" + s.b + "</p>";
+  });
+})();
+
+// ───────────── 공통: 시퀀스(주고받기) 그림 ─────────────
+var NS = "http://www.w3.org/2000/svg";
+function el(name, attrs, text) { var e = document.createElementNS(NS, name); for (var k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; }
+function makeSeq(boxId, captId, ctlId, scene) {
+  var box = document.getElementById(boxId), capt = document.getElementById(captId);
+  var W = 960, n = scene.lanes.length, gap = W / n, top = 74, rowH = 54, H = top + scene.msgs.length * rowH + 20;
+  var cols = ["--c1","--c2","--c3","--c4","--c5"];
+  function x(i) { return gap * i + gap / 2; }
+  function draw(cur) {
+    box.innerHTML = "";
+    var svg = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img", "aria-label": scene.title });
+    scene.lanes.forEach(function (ln, i) {
+      var c = "var(" + cols[i % 5] + ")";
+      svg.appendChild(el("line", { class: "life", x1: x(i), x2: x(i), y1: 56, y2: H - 8 }));
+      svg.appendChild(el("rect", { class: "lane-box", x: x(i) - gap / 2 + 10, y: 6, width: gap - 20, height: 50, rx: 10, stroke: c }));
+      svg.appendChild(el("text", { class: "lane-t", x: x(i), y: 28 }, ln[0]));
+      svg.appendChild(el("text", { class: "lane-s", x: x(i), y: 45 }, ln[1]));
+    });
+    for (var k = 0; k <= cur; k++) {
+      var m = scene.msgs[k], y = top + k * rowH + 24, x1 = x(m.f), x2 = x(m.t), isNew = k === cur;
+      var color = m.bad ? "var(--bad)" : "var(" + cols[m.f % 5] + ")";
+      var g = el("g", { class: isNew ? "" : "old" });
+      var dir = x2 >= x1 ? 1 : -1, tip = x2 - dir * 4;
+      g.appendChild(el("path", { class: "arrow" + (isNew ? " draw" : ""), d: "M" + x1 + " " + y + " H" + tip, stroke: color }));
+      g.appendChild(el("path", { d: "M" + (tip + dir * 2) + " " + y + " l" + (-dir * 11) + " -7 v14 z", fill: color }));
+      g.appendChild(el("circle", { cx: x1, cy: y, r: 10, fill: color }));
+      g.appendChild(el("text", { class: "num", x: x1, y: y + 4 }, k + 1));
+      g.appendChild(el("text", { class: "lbl", x: (x1 + x2) / 2, y: y - 9 }, m.label));
+      svg.appendChild(g);
+    }
+    box.appendChild(svg);
+  }
+  makeControls(document.getElementById(ctlId), scene.msgs.length, function (i) {
+    draw(i);
+    var m = scene.msgs[i];
+    capt.innerHTML = '<div class="st">단계 ' + (i + 1) + " / " + scene.msgs.length + "</div><h2>" + m.title + "</h2><p>" + m.body + "</p>";
+  });
+}
+
+// ② 요청 한 번의 여정
+makeSeq("seq-req", "capt-req", "ctl-req", { title: "요청 한 번의 여정", lanes: [
+  ["브라우저","손님"], ["uvicorn","전화 받는 직원"], ["CORS 문지기","허용 목록 확인"], ["FastAPI 라우터","주소 → 함수"], ["health()","내가 쓴 함수"]
+], msgs: [
+  { f:0, t:1, label:"GET /health", title:"손님이 주소를 불러요", body:"브라우저가 <code>127.0.0.1:8000</code>으로 \"GET /health\"라는 글자를 보내요. 8000번 문 앞에서 기다리던 <b>uvicorn</b>이 그 글자(HTTP)를 읽어서 \"GET 방식, 주소 /health, 출처 localhost:5500\"처럼 파이썬이 다루기 쉬운 요청 객체로 바꿔요." },
+  { f:1, t:2, label:"요청 전달", title:"uvicorn이 FastAPI 앱에 넘겨요", body:"uvicorn은 글자 읽기만 맡고 판단은 안 해요. 요청을 <code>app</code>에 넘기면 가장 바깥에 서 있는 문지기(CORS 미들웨어)가 제일 먼저 받아요." },
+  { f:2, t:3, label:"출처 OK, 통과", title:"문지기가 출처를 확인해요", body:"요청의 Origin이 <code>FRONT_ORIGINS</code> 목록에 있는지 봐요. 있으면 통과시키고, 응답에 붙일 허용 표시를 기억해 둬요. 목록에 없으면 응답에 표시를 안 붙여서 <b>브라우저가 화면에 결과를 못 보여 줘요</b>(CORS 오류)." },
+  { f:3, t:4, label:"/health 일치", title:"라우터가 메뉴판을 찾아요", body:"FastAPI가 등록해 둔 메뉴판에서 \"GET /health\"를 찾아 <code>health()</code> 함수를 불러요. 없는 주소면 여기서 404 Not Found가 나요." },
+  { f:4, t:3, label:"{status: ok}", title:"함수가 답을 돌려줘요", body:"<code>health()</code>는 <code>{\"status\": \"ok\"}</code>라는 파이썬 딕셔너리를 return만 해요. 인터넷으로 보내는 일은 함수가 하지 않아요." },
+  { f:3, t:2, label:"JSON · 200", title:"FastAPI가 포장해요", body:"딕셔너리를 JSON 글자 <code>{\"status\":\"ok\"}</code>로 바꾸고, 성공을 뜻하는 상태 코드 <b>200</b>을 붙여요. 오류를 직접 던지면(예: <code>HTTPException(502)</code>) 여기서 502로 바뀌어 나가요." },
+  { f:2, t:1, label:"허용 표시 추가", title:"문지기가 도장을 찍어요", body:"응답이 나가는 길목에서 문지기가 <code>Access-Control-Allow-Origin</code>이라는 도장(헤더)을 찍어요. 브라우저는 이 도장이 있어야 화면 코드에 결과를 건네줘요." },
+  { f:1, t:0, label:"200 + JSON", title:"손님이 결과를 받아요", body:"uvicorn이 완성된 응답을 글자로 만들어 브라우저에 보내요. 화면에는 <code>{\"status\":\"ok\"}</code>가 나타나고, 요청 한 번이 끝나요. 터미널에는 <code>GET /health 200 OK</code>가 찍혀요." }
+]});
+
+// ③ Supabase와 대화
+makeSeq("seq-sb", "capt-sb", "ctl-sb", { title: "Supabase와 대화", lanes: [
+  ["main.py","db_check()"], ["supabase 라이브러리","sb 도구"], ["Supabase 서버","우리 프로젝트 API"], ["Postgres","실제 저장소"]
+], msgs: [
+  { f:0, t:1, label:"list_users(1명)", title:"코드가 도구에 부탁해요", body:"<code>sb.auth.admin.list_users(page=1, per_page=1)</code>은 \"가입자 목록 1명만 가져와\"라는 부탁이에요. 데이터를 꺼내 오려는 게 아니라 <b>열쇠가 맞는지 확인하는 용도</b>예요. 테이블을 만들지 않아도 쓸 수 있어서 골랐어요." },
+  { f:1, t:2, label:"HTTPS + 열쇠", title:"도구가 인터넷으로 요청을 보내요", body:"supabase 라이브러리가 파이썬 부탁을 <b>HTTPS 요청</b>으로 바꿔요. <code>SUPABASE_URL</code> 주소로 보내면서 헤더에 <code>SUPABASE_SECRET_KEY</code>를 실어요. 이 시점에 처음으로 인터넷 통신이 일어나요." },
+  { f:2, t:3, label:"열쇠 확인 후 조회", title:"Supabase가 열쇠를 확인해요", body:"Supabase 서버가 헤더의 키를 검사해요. secret key는 <b>관리자 권한</b>이라 사용자 관리 같은 기능도 허용돼요. 통과하면 안쪽 데이터베이스(Postgres)에 실제로 물어봐요." },
+  { f:3, t:2, label:"사용자 1건", title:"데이터베이스가 대답해요", body:"데이터베이스가 조회 결과를 돌려줘요. 가입자가 없으면 빈 목록이 와도 정상이에요. 중요한 건 <b>오류 없이 답이 왔다</b>는 사실이에요." },
+  { f:2, t:1, label:"HTTP 200 JSON", title:"Supabase가 응답을 보내요", body:"결과를 JSON 글자로 포장해서 상태 코드 200과 함께 인터넷으로 돌려보내요." },
+  { f:1, t:0, label:"파이썬 객체로", title:"도구가 파이썬 값으로 바꿔 줘요", body:"라이브러리가 JSON을 파이썬이 다루기 쉬운 객체로 바꿔서 <code>db_check()</code>에 돌려줘요. 예외 없이 지나갔으니 다음 줄 <code>return {\"supabase\": \"connected\"}</code>가 실행돼요." },
+  { f:1, t:0, label:"키 틀림 → 예외", bad:true, title:"실패하면 이렇게 돼요", body:"URL이 틀리거나 키가 틀리면 Supabase가 401 같은 오류를 보내고, 라이브러리가 파이썬 <b>예외(Exception)</b>를 던져요. 코드의 <code>except</code>가 잡아서 <code>HTTPException(502)</code>로 바꿔요. 502는 \"내 서버는 멀쩡한데 뒤쪽 서버가 안 된다\"는 뜻이에요." }
+]});
+
+// ④ Railway에 올리면
+makeSeq("seq-rw", "capt-rw", "ctl-rw", { title: "Railway에 올리면", lanes: [
+  ["내 컴퓨터","코드가 있는 곳"], ["GitHub","코드 보관함"], ["Railway 빌드","상자 만드는 곳"], ["Railway 서버","24시간 켜진 컴퓨터"], ["사용자","인터넷"]
+], msgs: [
+  { f:0, t:1, label:"git push", title:"코드를 올려요", body:"<code>git push</code>로 코드를 GitHub에 올려요. <code>.gitignore</code>에 적힌 <code>.env</code>와 <code>.venv</code>는 <b>올라가지 않아요.</b> 그래서 열쇠가 인터넷에 새어 나가지 않아요. (Railway CLI의 <code>railway up</code>으로 GitHub 없이 바로 올리는 방법도 있어요.)" },
+  { f:1, t:2, label:"코드 가져가요", title:"Railway가 코드를 가져가요", body:"Railway 프로젝트를 GitHub 저장소와 연결해 두면, 새 코드가 올라올 때마다 Railway가 가져가서 <b>빌드</b>를 시작해요." },
+  { f:2, t:3, label:"pip install", title:"실행할 상자를 만들어요", body:"빌더가 <code>requirements.txt</code>를 읽고 FastAPI, uvicorn, supabase 같은 패키지를 설치해서 <b>실행 가능한 상자(컨테이너)</b>를 만들어요. <code>requirements.txt</code>가 없으면 무엇을 설치할지 몰라서 여기서 실패해요." },
+  { f:0, t:3, label:"Variables 등록", title:"열쇠는 Railway에 직접 넣어요", body:"Railway 화면(또는 <code>railway variables</code>)에서 <code>SUPABASE_URL</code>, <code>SUPABASE_SECRET_KEY</code>를 직접 입력해요. 서버가 켜질 때 이 값들이 환경변수 메모판에 들어가서, <code>main.py</code>의 <code>os.environ[...]</code>가 그대로 읽어요." },
+  { f:2, t:3, label:"uvicorn 실행", title:"시작 명령으로 켜요", body:"<code>Procfile</code>의 <code>uvicorn main:app --host 0.0.0.0 --port $PORT</code>가 실행돼요. <code>0.0.0.0</code>은 \"밖에서 오는 요청도 받아요\"라는 뜻이고, <code>$PORT</code>는 Railway가 정해 주는 문 번호예요. 로컬의 127.0.0.1:8000과 다른 점이에요." },
+  { f:4, t:3, label:"…/health 호출", title:"사용자가 인터넷 주소로 불러요", body:"Railway가 <code>https://○○○.up.railway.app</code> 같은 공개 주소를 만들어 줘요. 누구든 이 주소로 요청하면 Railway가 켜져 있는 서버의 uvicorn으로 전달해요. 이후 흐름은 ②번 탭과 똑같아요." },
+  { f:3, t:4, label:"{status: ok}", title:"같은 코드가 같은 답을 줘요", body:"내 컴퓨터에서 돌던 것과 같은 코드가 답을 돌려줘요. 단, 화면(Vercel 등)의 주소를 <code>FRONT_ORIGINS</code> Variables에 넣어야 문지기가 그 화면을 허용해요." }
+]});
+</script>
+</body>
+</html>
